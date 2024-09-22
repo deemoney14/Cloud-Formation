@@ -213,7 +213,7 @@ Resources:
         - IpProtocol: 'icmp'
           FromPort: -1
           ToPort: -1
-      SourceSecurityGroupId: !Ref AppSG1A
+          SourceSecurityGroupId: !Ref AppSG1A
       Tags:
         - Key: 'Name'
           Value: AppSG1C
