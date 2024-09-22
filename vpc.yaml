@@ -127,3 +127,93 @@ Resources:
     Properties:
       RouteTableId: !Ref PrivateRouteTable
       SubnetId: !Ref AppPrivateSubnet2
+
+#Bastion Host 
+  BastionHS:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: t2.micro
+      ImageId: ami-04fdea8e25817cd69
+      SubnetId: !Ref PublicSubnet1
+      KeyName: bash
+      Tags:
+        - Key: 'Name'
+          Value: BastionHS
+      SecurityGroupIds:
+        - !Ref 'BastionSG'
+
+# Bastion SG
+  BastionSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: "Allow ssh into your instance"
+      VpcId: !Ref MyVpc
+      SecurityGroupIngress:
+        - IpProtocol: 'tcp'
+          FromPort: 22
+          ToPort: 22
+          CidrIp: '0.0.0.0/0'
+      Tags:
+        - Key: 'Name'
+          Value: BastionSG
+
+# App Instance:
+  AppInstance1:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-04fdea8e25817cd69
+      InstanceType: t2.micro
+      SubnetId: !Ref AppPrivateSubnet1
+      KeyName: rush
+      Tags:
+        - Key: 'Name'
+          Value: AppInstance1
+      SecurityGroupIds:
+        - !Ref 'AppSG1A'
+
+
+
+# App1 SG:
+  AppSG1A:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow access from the Bastion host
+      VpcId: !Ref MyVpc
+      SecurityGroupIngress:
+        - IpProtocol: 'tcp'
+          FromPort: 22
+          ToPort: 22
+          SourceSecurityGroupId: !Ref BastionSG
+      Tags:
+        - Key: 'Name'
+          Value: AppSG1A
+
+# App Instance2:
+  AppInstance2:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-04fdea8e25817cd69
+      InstanceType: t2.micro
+      KeyName: kash
+      SubnetId: !Ref AppPrivateSubnet2
+      Tags:
+        - Key: 'Name'
+          Value: AppInstance2
+      SecurityGroupIds:
+        - !Ref AppSG1C
+
+
+#App2 SG:
+  AppSG1C:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow to ping from app private 1
+      VpcId: !Ref MyVpc
+      SecurityGroupIngress:
+        - IpProtocol: 'icmp'
+          FromPort: -1
+          ToPort: -1
+      SourceSecurityGroupId: !Ref AppSG1A
+      Tags:
+        - Key: 'Name'
+          Value: AppSG1C
