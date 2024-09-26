@@ -1,0 +1,236 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Create a VPC with two AZ and Four subnet 
+# My Vpc
+Resources:
+  MyVpc:
+    Type: 'AWS::EC2::VPC'
+    Properties:
+      CidrBlock: '10.0.0.0/16'
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: 'Name'
+          Value: MyVpc
+# Public Subnet 1a
+  PublicSubnet1:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      VpcId: !Ref MyVpc
+      CidrBlock: '10.0.1.0/20'
+      AvailabilityZone: "us-west-1a"
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: 'Name'
+          Value: PublicSubnet1
+
+# app-Private Subnet 1a Subnet 1
+  AppPrivateSubnet1:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      VpcId: !Ref MyVpc
+      CidrBlock: '10.0.16.0/20'
+      AvailabilityZone: "us-west-1a"
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: 'Name'
+          Value: AppPrivateSubnet1
+
+# Public Subnet 1b
+  PublicSubnet2:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      VpcId: !Ref MyVpc
+      CidrBlock: '10.0.48.0/20'
+      AvailabilityZone: "us-west-1c"
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: 'Name'
+          Value: PublicSubnet2
+
+# app-Private Subnet 1b Subnet 2
+  AppPrivateSubnet2:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      VpcId: !Ref MyVpc
+      CidrBlock: '10.0.32.0/20'
+      AvailabilityZone: "us-west-1c"
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: 'Name'
+          Value: AppPrivateSubnet2
+
+# Defining the Internet Gateway
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: 'Name'
+          Value: MyIGW
+
+# Attaching the Internet Gateway to the VPC
+  IGWAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref MyVpc
+
+# Public Route within VPC:
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref MyVpc
+      Tags:
+        - Key: Name
+          Value: PublicRouteTable
+
+#Private Route within VPC
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref MyVpc
+      Tags:
+        - Key: 'Name'
+          Value: PrivateRouteTable
+
+# Attaching PublicRoute to IGW:
+  DefaultPublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: IGWAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: '0.0.0.0/0'
+      GatewayId: !Ref InternetGateway
+
+# PublicSubnet1 Route Table Association
+  PublicSubnet1RTA:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet1
+
+# PublicSubnet2 Route Table Association
+  PublicSubnet2RTA:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet2
+
+#PrivateSubnet1 Route Table
+  PrivateSubnet1RTA:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      SubnetId: !Ref AppPrivateSubnet1
+#PrivateSubnet2 Route Table
+  PrivateSubnet2RTA:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      SubnetId: !Ref AppPrivateSubnet2
+
+# Load Balancer
+  LoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: MyloadBalancer
+      Subnets:
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+      SecurityGroups:
+        - !Ref LoadBalancerSG
+
+  #Target Group
+  TargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Port: 80
+      Protocol: HTTP
+      VpcId: !Ref MyVpc
+      Targets:
+        - Id: !Ref Webserver1
+        - Id: !Ref Webserver2
+
+
+#Listener
+  Listener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref TargetGroup
+      LoadBalancerArn: !Ref LoadBalancer
+      Port: 80
+      Protocol: HTTP
+
+#Web server1a
+  Webserver1:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: 'ami-04fdea8e25817cd69'
+      InstanceType: t2.micro
+      SubnetId: !Ref PublicSubnet1
+      Tags:
+        - Key: 'Name'
+          Value: Webserver1
+      SecurityGroupIds:
+        - !Ref WebSecurityGroup
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          yum update -y
+          yum install -y httpd
+          systemctl start httpd
+          systemctl enable httpd
+          echo "<html><body><h1>Hello From WebServer1A!</h1></body></html>" > /var/www/html/index.html
+
+
+# Web Server2b
+  Webserver2:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: 'ami-04fdea8e25817cd69'
+      InstanceType: t2.micro
+      SubnetId: !Ref PublicSubnet2
+      Tags:
+        - Key: 'Name'
+          Value: Webserver2
+      SecurityGroupIds:
+        - !Ref WebSecurityGroup
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          yum update -y
+          yum install -y httpd
+          systemctl start httpd
+          systemctl enable httpd
+          echo "<html><body><h1>Hello From WebServer1B!</h1></body></html>" > /var/www/html/index.html
+
+#Web Security to allow load balancer only:
+  WebSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allowing Load Balance Traffic 
+      VpcId: !Ref MyVpc
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          SourcesSecurityGroupId: !Ref LoadBalancerSG
+      Tags:
+        - Key: 'Name'
+          Value: WebSecurityGroup
+
+# Load Balancer Security Group
+  LoadBalancerSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allowing HTTP Traffic to Load Balancer
+      VpcId: !Ref MyVpc
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: 'Name'
+          Value: LoadBalancerSG
